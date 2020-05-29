@@ -1,1 +1,5 @@
 guide.md
+.vagrant/
+.vscode/
+*.keytab
+*.keytab.base64
