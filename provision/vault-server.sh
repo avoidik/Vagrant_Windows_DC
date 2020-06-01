@@ -69,7 +69,7 @@ cat <<EOF > /etc/krb5.conf
     preferred_preauth_types = 18
     ticket_lifetime = 24h
     renew_lifetime = 48h
-    rdns = off
+    rdns = false
 
 [realms]
     ${DOMAIN_NAME_UPPER} = {
