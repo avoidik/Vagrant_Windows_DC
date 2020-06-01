@@ -11,8 +11,9 @@ $vault_ip_address  = '192.168.56.3'
 Vagrant.configure('2') do |config|
 
     config.vm.define $machine_ad do |nodeconfig|
-        nodeconfig.vm.box      = 'StefanScherer/windows_2016'
-        nodeconfig.vm.hostname = $machine_ad # do not set this to vagrant
+        nodeconfig.vm.box         = "gusztavvargadr/windows-server"
+        nodeconfig.vm.box_version = "1607-standard"
+        nodeconfig.vm.hostname    = $machine_ad # do not set this to vagrant
 
         #WinRM settings
         nodeconfig.winrm.transport       = :plaintext
@@ -43,7 +44,7 @@ Vagrant.configure('2') do |config|
         nodeconfig.vm.provision 'shell', path: 'provision/domain-controller-configure.ps1', args: [$machine_vault, $vault_ip_address]
         nodeconfig.vm.provision 'shell', reboot: true
         nodeconfig.vm.provision 'shell', path: 'provision/base.ps1', args: [$timezone]
-        nodeconfig.vm.provision 'shell', path: 'provision/enable-ssh.ps1'
+        #nodeconfig.vm.provision 'shell', path: 'provision/enable-ssh.ps1'
         nodeconfig.vm.provision 'shell', path: 'provision/ad-explorer.ps1'
     end
 
