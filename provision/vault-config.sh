@@ -32,8 +32,11 @@ printf "%b" "add_entry -password -p ${MASTER_USER}@${DOMAIN_NAME_UPPER} -e aes25
 printf "%b" "read_kt ${MASTER_USER}.keytab\nlist -e\nquit" | ktutil
 
 #klist -k -t -K -e "${MASTER_USER}.keytab"
-#kinit -V -k -t "${MASTER_USER}.keytab" "${MASTER_USER}"
+kinit -V -k -t "${MASTER_USER}.keytab" "${MASTER_USER}"
 #kvno -k "${MASTER_USER}.keytab" "${MASTER_USER}"
+
+ldapsearch -x -b '' -s base supportedSASLMechanisms -H "ldap://${DOMAIN_NAME}"
+ldapsearch -LLL -Y GSSAPI -H "ldap://${DOMAIN_NAME}" -b "${DOMAIN_DN}" "(sAMAccountName=${MASTER_USER})" 'msDS-KeyVersionNumber'
 
 base64 "${MASTER_USER}.keytab" > "${MASTER_USER}.keytab.base64"
 
