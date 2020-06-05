@@ -30,7 +30,7 @@ unzip -qod /usr/local/bin "/tmp/vault_${VAULT_VERSION}_linux_amd64.zip" vault
 chmod +x /usr/local/bin/vault
 rm -f "/tmp/vault_${VAULT_VERSION}_linux_amd64.zip"
 
-docker stop
+docker stop "${MACHINE_NAME}"
 docker rm -fv "${MACHINE_NAME}"
 docker run --rm -d --cap-add=IPC_LOCK --name "${MACHINE_NAME}" -p 8200:8200 \
     -e 'VAULT_DEV_ROOT_TOKEN_ID=myroot' -e 'VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200' vault
