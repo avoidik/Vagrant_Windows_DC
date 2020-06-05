@@ -41,10 +41,10 @@ Vagrant.configure('2') do |config|
         # Installing AD DS
         nodeconfig.vm.provision 'shell', path: 'provision/domain-controller.ps1', args: [$domain]
         nodeconfig.vm.provision 'shell', reboot: true
-        nodeconfig.vm.provision 'shell', path: 'provision/domain-controller-configure.ps1', args: [$machine_vault, $vault_ip_address]
+        nodeconfig.vm.provision 'shell', path: 'provision/domain-controller-configure.ps1', args: [$machine_vault, $vault_ip_address, $machine_ad]
         nodeconfig.vm.provision 'shell', reboot: true
         nodeconfig.vm.provision 'shell', path: 'provision/base.ps1', args: [$timezone]
-        #nodeconfig.vm.provision 'shell', path: 'provision/enable-ssh.ps1'
+        nodeconfig.vm.provision 'shell', path: 'provision/enable-ssh.ps1'
         nodeconfig.vm.provision 'shell', path: 'provision/ad-explorer.ps1'
     end
 

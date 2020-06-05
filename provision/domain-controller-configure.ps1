@@ -1,6 +1,7 @@
 param (
     $vaultServerName = 'vault-server',
-    $vaultIpAddress = '192.168.56.3'
+    $vaultIpAddress = '192.168.56.3',
+    $machineAdName = 'windows-dc'
 )
 
 #
@@ -16,6 +17,8 @@ $vagrantUserName = 'vagrant'
 
 $adminUserName = 'Administrator'
 $adminuserPassword = 'AuNfSx5a8HZM'
+
+$engineeringGroup = 'engineering-team'
 
 # wait until we can access the AD. this is needed to prevent errors like:
 #   Unable to find a default server with Active Directory Web Services running.
@@ -59,17 +62,105 @@ foreach($internalNatIp in $vagrantNatIpAddress) {
         Get-DnsServerResourceRecord -ZoneName $domain -Type 1 `
             | Where-Object {$_.RecordData.IPv4Address -eq $internalNatIp} `
             | Remove-DnsServerResourceRecord -ZoneName $domain -Force
+    }
+}
+
+Set-DnsServerForwarder -IPAddress '1.1.1.1'
+
+# flush the dns client cache.
+Clear-DnsClientCache
+
+$localNetAdapter = Get-NetAdapter -Physical `
+    | Where-Object {$_ | Get-NetIPAddress | Where-Object {$_.PrefixOrigin -ne 'Dhcp'}} `
+    | Sort-Object -Property Name `
+    | Select-Object -First 1
+# disable ipv6.
+$localNetAdapter | Disable-NetAdapterBinding -ComponentID ms_tcpip6
+
+$localIpAddress = ($localNetAdapter | Get-NetIPAddress).IPv4Address
+foreach($localIp in $localIpAddress) {
+    if ($localIp) {
         # remove the dc.$domain nat ip address resource record from dns.
         $dnsServerSettings = Get-DnsServerSetting -All
         $dnsServerSettings.ListeningIPAddress = @(
             $dnsServerSettings.ListeningIPAddress `
-                | Where-Object {$_ -ne $internalNatIp}
+                | Where-Object {$_ -eq $localIp}
         )
         Set-DnsServerSetting $dnsServerSettings
+
+        $shortNetAddr = $localIp.Substring(0, $localIp.LastIndexOf('.'))
+        $lastOctet = $localIp.Substring($localIp.LastIndexOf('.') + 1)
+        $reverseShortNet = ($shortNetAddr.ToString() -replace '^(\d+)\.(\d+)\.(\d+)$','$3.$2.$1')
+
+        $retryFlag = $true
+
+        while ($retryFlag) {
+            try {
+                Add-DNSServerPrimaryZone -NetworkID ($shortNetAddr + '.0/24') -ReplicationScope 'Domain' -DynamicUpdate 'Secure' -ErrorAction 'Stop'
+                $retryFlag = $false
+            }
+            catch [Microsoft.Management.Infrastructure.CimException] {
+                $catInfo = $Error[0].CategoryInfo.ToString()
+                switch ($catInfo.Substring(0, $catInfo.IndexOf(':'))) {
+                    "ResourceExists"
+                    {
+                        Write-Host "ReverseZone already exist"
+                        $retryFlag = $false
+                    }
+                    "ObjectNotFound"
+                    {
+                        Write-Host "Waiting 30 seconds for DNS zone to be available..."
+                        Start-Sleep -Seconds 30
+                    }
+                    default
+                    {
+                        Write-Host "Unknown: $catInfo"
+                    }
+                }
+            }
+            catch {
+                $excClass = $Error[0].Exception.GetType().FullName
+                $catInfo = $Error[0].CategoryInfo.ToString()
+                Write-Host "Unhandled: $excClass"
+                Write-Host "Category: $catInfo"
+            }
+        }
+
+        $retryFlag = $true
+
+        while ($retryFlag) {
+            try {
+                Add-DnsServerResourceRecordPtr -Name $lastOctet -ZoneName ($reverseShortNet + '.in-addr.arpa') -PtrDomainName "$machineAdName.$domain" -ErrorAction 'Stop'
+                $retryFlag = $false
+            }
+            catch [Microsoft.Management.Infrastructure.CimException] {
+                $catInfo = $Error[0].CategoryInfo.ToString()
+                switch ($catInfo.Substring(0, $catInfo.IndexOf(':'))) {
+                    "ResourceExists"
+                    {
+                        Write-Host "ReverseZonePtr already exist"
+                        $retryFlag = $false
+                    }
+                    "ObjectNotFound"
+                    {
+                        Write-Host "Waiting 30 seconds for DNS zone to be available..."
+                        Start-Sleep -Seconds 30
+                    }
+                    default
+                    {
+                        Write-Host "Unknown: $catInfo"
+                    }
+                }
+            }
+            catch {
+                $excClass = $Error[0].Exception.GetType().FullName
+                $catInfo = $Error[0].CategoryInfo.ToString()
+                Write-Host "Unhandled: $excClass"
+                Write-Host "Category: $catInfo"
+            }
+        }
     }
 }
-# flush the dns client cache.
-Clear-DnsClientCache
 
 If(!(Get-ADOrganizationalUnit -Filter "distinguishedName -eq '$groupsAdPath'")) {
     New-ADOrganizationalUnit -Name $groupsOU -Path $domainDn
@@ -106,7 +197,8 @@ Set-ADUser `
     -PasswordNeverExpires $true
 
 # add vault user.
-New-ADUser `
+try {
+    New-ADUser `
     -Path $usersAdPath `
     -Name $vaultUserName `
     -UserPrincipalName "$vaultUserName@$domain" `
@@ -114,6 +206,10 @@ New-ADUser `
     -AccountPassword (ConvertTo-SecureString -AsPlainText $vaultUserPassword -Force) `
     -Enabled $true `
     -PasswordNeverExpires $true
+}
+catch [Microsoft.ActiveDirectory.Management.ADIdentityAlreadyExistsException] {
+    Write-Host "User $vaultUserName already exist"
+}
 
 # add user to the Domain Admins group.
 Add-ADGroupMember `
@@ -121,17 +217,22 @@ Add-ADGroupMember `
     -Members "CN=$vaultUserName,$usersAdPath"
 
 # add basic user.
-New-ADUser `
-    -Path $usersAdPath `
-    -Name $basicUserName `
-    -UserPrincipalName "$basicUserName@$domain" `
-    -EmailAddress "$basicUserName@$domain" `
-    -GivenName 'Basic' `
-    -Surname 'User' `
-    -DisplayName 'Basic User' `
-    -AccountPassword (ConvertTo-SecureString -AsPlainText $basicUserPassword -Force) `
-    -Enabled $true `
-    -PasswordNeverExpires $true
+try {
+    New-ADUser `
+        -Path $usersAdPath `
+        -Name $basicUserName `
+        -UserPrincipalName "$basicUserName@$domain" `
+        -EmailAddress "$basicUserName@$domain" `
+        -GivenName 'Basic' `
+        -Surname 'User' `
+        -DisplayName 'Basic User' `
+        -AccountPassword (ConvertTo-SecureString -AsPlainText $basicUserPassword -Force) `
+        -Enabled $true `
+        -PasswordNeverExpires $true
+}
+catch [Microsoft.ActiveDirectory.Management.ADIdentityAlreadyExistsException] {
+    Write-Host "User $basicUserName already exist"
+}
 
 $KerberosAES128 = 0x08
 $KerberosAES256 = 0x10
@@ -139,17 +240,17 @@ $KerberosAES256 = 0x10
 Set-ADUser -Identity $vaultUserName -Replace @{'msDS-SupportedEncryptionTypes'=($KerberosAES128 -bor $KerberosAES256)}
 Set-ADUser -Identity $basicUserName -Replace @{'msDS-SupportedEncryptionTypes'=($KerberosAES128 -bor $KerberosAES256)}
 
-Get-ADUser -Identity $vaultUserName -Property 'msDS-KeyVersionNumber'
-Get-ADUser -Identity $basicUserName -Property 'msDS-KeyVersionNumber'
+Get-ADUser -Identity $vaultUserName -Property 'msDS-KeyVersionNumber' | Format-List msDS-KeyVersionNumber
+Get-ADUser -Identity $basicUserName -Property 'msDS-KeyVersionNumber' | Format-List msDS-KeyVersionNumber
 
 Set-ADUser -Identity $vaultUserName -ServicePrincipalNames @{Replace="HTTP/${vaultServerName}.${domain}:8200", "HTTP/${vaultServerName}.$domain"}
 
-Add-DnsServerResourceRecordA -Name $vaultServerName -ZoneName $domain -IPv4Address $vaultIpAddress
+Add-DnsServerResourceRecordA -Name $vaultServerName -ZoneName $domain -IPv4Address $vaultIpAddress -CreatePtr
 
-New-ADGroup -Name 'engineering-team' -Path $groupsAdPath -GroupCategory Security -GroupScope Global
+New-ADGroup -Name $engineeringGroup -Path $groupsAdPath -GroupCategory Security -GroupScope Global
 
 Add-ADGroupMember `
-    -Identity "CN=engineering-team,$groupsAdPath" `
+    -Identity "CN=$engineeringGroup,$groupsAdPath" `
     -Members "CN=$basicUserName,$usersAdPath"
 
 Write-Host 'basic user Group Membership'

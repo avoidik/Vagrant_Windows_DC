@@ -22,7 +22,7 @@ usermod -a -G docker vagrant
 systemctl reenable docker
 systemctl restart docker
 
-apt-get install -qq -o=Dpkg::Use-Pty=0 git-core python3-pip build-essential krb5-user libkrb5-dev krb5-config libssl-dev libsasl2-dev
+apt-get install -qq -o=Dpkg::Use-Pty=0 git-core python3-pip build-essential ldap-utils krb5-user libkrb5-dev krb5-config libssl-dev libsasl2-dev libsasl2-modules-gssapi-mit
 pip3 install requests-kerberos
 
 curl -fsSL "https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip" -o "/tmp/vault_${VAULT_VERSION}_linux_amd64.zip"
@@ -30,6 +30,8 @@ unzip -qod /usr/local/bin "/tmp/vault_${VAULT_VERSION}_linux_amd64.zip" vault
 chmod +x /usr/local/bin/vault
 rm -f "/tmp/vault_${VAULT_VERSION}_linux_amd64.zip"
 
+docker stop
+docker rm -fv "${MACHINE_NAME}"
 docker run --rm -d --cap-add=IPC_LOCK --name "${MACHINE_NAME}" -p 8200:8200 \
     -e 'VAULT_DEV_ROOT_TOKEN_ID=myroot' -e 'VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200' vault
 
@@ -69,7 +71,6 @@ cat <<EOF > /etc/krb5.conf
     preferred_preauth_types = 18
     ticket_lifetime = 24h
     renew_lifetime = 48h
-    rdns = false
 
 [realms]
     ${DOMAIN_NAME_UPPER} = {

@@ -5,7 +5,11 @@ vagrant up
 ```
 
 ```bash
-ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null vagrant@192.168.56.2
+vagrant ssh windows-dc
+```
+
+```bash
+vagrant ssh vault-server
 ```
 
 ```bash
