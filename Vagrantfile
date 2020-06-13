@@ -11,8 +11,8 @@ $vault_ip_address  = '192.168.56.3'
 Vagrant.configure('2') do |config|
 
     config.vm.define $machine_ad do |nodeconfig|
-        nodeconfig.vm.box         = "gusztavvargadr/windows-server"
-        nodeconfig.vm.box_version = "1607-standard"
+        nodeconfig.vm.box         = 'gusztavvargadr/windows-server-2016-standard'
+        nodeconfig.vm.box_version = '2005.0.0'
         nodeconfig.vm.hostname    = $machine_ad # do not set this to vagrant
 
         #WinRM settings
