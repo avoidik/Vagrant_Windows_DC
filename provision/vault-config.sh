@@ -34,6 +34,7 @@ printf "%b" "read_kt ${MASTER_USER}.keytab\nlist -e\nquit" | ktutil
 #klist -k -t -K -e "${MASTER_USER}.keytab"
 kinit -V -k -t "${MASTER_USER}.keytab" "${MASTER_USER}"
 #kvno -k "${MASTER_USER}.keytab" "${MASTER_USER}"
+chmod 644 "${MASTER_USER}.keytab"
 
 ldapsearch -x -b '' -s base supportedSASLMechanisms -H "ldap://${DOMAIN_NAME}"
 ldapsearch -LLL -Y GSSAPI -H "ldap://${DOMAIN_NAME}" -b "${DOMAIN_DN}" "(sAMAccountName=${MASTER_USER})" 'msDS-KeyVersionNumber'
@@ -81,6 +82,7 @@ printf "%b" "read_kt ${SERVICE_USER}.keytab\nlist -e\nquit" | ktutil
 #klist -k -t -K -e "${SERVICE_USER}.keytab"
 #kinit -V -k -t "${SERVICE_USER}.keytab" "${SERVICE_USER}"
 #kvno -k "${SERVICE_USER}.keytab" "${SERVICE_USER}"
+chmod 644 "${SERVICE_USER}.keytab"
 
 vault login -method=kerberos \
     username="${SERVICE_USER}" \

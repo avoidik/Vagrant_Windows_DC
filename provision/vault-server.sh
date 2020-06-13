@@ -22,8 +22,8 @@ usermod -a -G docker vagrant
 systemctl reenable docker
 systemctl restart docker
 
-apt-get install -qq -o=Dpkg::Use-Pty=0 git-core python3-pip build-essential ldap-utils krb5-user libkrb5-dev krb5-config libssl-dev libsasl2-dev libsasl2-modules-gssapi-mit
-pip3 install requests-kerberos
+apt-get install -qq -o=Dpkg::Use-Pty=0 git-core python3-pip build-essential ldap-utils krb5-user libkrb5-dev krb5-config libssl-dev libsasl2-dev libsasl2-modules-gssapi-mit libldap2-dev python3-ldap
+pip3 install -q requests kerberos
 
 curl -fsSL "https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip" -o "/tmp/vault_${VAULT_VERSION}_linux_amd64.zip"
 unzip -qod /usr/local/bin "/tmp/vault_${VAULT_VERSION}_linux_amd64.zip" vault
